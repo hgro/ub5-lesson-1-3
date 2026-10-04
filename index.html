@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bestandteile eines Schaltterms benennen</title>
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#f3f6f4; --card:#ffffff; --ink:#1b2a27; --muted:#5b6b67; --line:#c9d6d1;
+  --accent:#0f6b5c; --accent-ink:#ffffff; --sel:#dff0ea;
+  --ok:#1d7a3a; --ok-bg:#dcf2e1; --bad:#b3261e; --bad-bg:#fbe2df;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#121a18; --card:#1b2624; --ink:#e6efec; --muted:#9bb0aa; --line:#33443f;
+    --accent:#4fc3a8; --accent-ink:#0b1513; --sel:#244039;
+    --ok:#7fd99a; --ok-bg:#1d3a27; --bad:#ff9d94; --bad-bg:#432220;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121a18; --card:#1b2624; --ink:#e6efec; --muted:#9bb0aa; --line:#33443f;
+  --accent:#4fc3a8; --accent-ink:#0b1513; --sel:#244039;
+  --ok:#7fd99a; --ok-bg:#1d3a27; --bad:#ff9d94; --bad-bg:#432220;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;line-height:1.5}
+main{max-width:860px;margin:0 auto;padding:24px 16px 40px}
+h1{font-size:1.6rem;margin:0 0 6px}
+.lead{color:var(--muted);margin:0 0 22px}
+.term{
+  display:flex;flex-wrap:nowrap;justify-content:center;align-items:flex-start;gap:6px;overflow-x:auto;
+  background:var(--card);border:2px solid var(--line);border-radius:10px;padding:22px 12px;
+}
+button.tok{
+  font:inherit;color:inherit;background:transparent;border:2px solid transparent;border-radius:10px;
+  padding:8px 10px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:3.2em;
+}
+button.tok:hover{border-color:var(--accent)}
+button.tok:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button.tok.selected{background:var(--sel);border-color:var(--accent)}
+button.tok.ok{background:var(--ok-bg);border-color:var(--ok)}
+button.tok.bad{background:var(--bad-bg);border-color:var(--bad)}
+.glyph{font-size:2.2rem;font-weight:600;line-height:1.1;font-family:Consolas,"Courier New",monospace}
+.tag{
+  min-width:6.6em;min-height:1.7em;border-radius:999px;padding:0 10px;
+  display:grid;place-items:center;font-weight:700;font-size:.85rem;
+  background:var(--accent);color:var(--accent-ink);
+}
+.closing .tag{display:none}
+.tag{text-align:center;line-height:1.15}
+.tag:empty{background:transparent;border:2px dashed var(--line)}
+.col-title{font-weight:600;color:var(--muted);font-size:.95rem;margin:24px 4px 8px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+button.chip{
+  font:inherit;font-weight:600;color:var(--accent);background:var(--card);
+  border:2px solid var(--line);border-radius:10px;padding:10px 16px;cursor:pointer;
+}
+button.chip:hover{border-color:var(--accent)}
+button.chip:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px;align-items:center}
+.btn{font:inherit;font-weight:600;border-radius:10px;padding:11px 20px;cursor:pointer;border:2px solid var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+#msg{margin-top:18px;font-weight:600;min-height:1.5em}
+#msg.ok{color:var(--ok)} #msg.bad{color:var(--bad)}
+@media (max-width:560px){
+  .term{gap:2px;padding:18px 4px}
+  .glyph{font-size:clamp(1.5rem,7.5vw,2rem)}
+  button.tok{min-width:0;padding:6px 2px 4px;gap:4px}
+  .tag{min-width:3.8em;min-height:2.4em;padding:0 4px;font-size:clamp(.52rem,2.5vw,.8rem);border-radius:10px}
+}
+</style>
+</head>
+<body>
+<main>
+  <h1>Bestandteile eines Schaltterms benennen</h1>
+  <p class="lead">Tippe auf einen Bestandteil des Schaltterms und dann auf die passende Bezeichnung. Mit „Prüfen“ siehst du, was stimmt.</p>
+
+  <div class="term" id="term" role="group" aria-label="Schaltterm (a UND 1) ODER b"></div>
+
+  <div class="col-title">Bezeichnung</div>
+  <div class="chips" id="chips"></div>
+
+  <div class="actions">
+    <button class="btn primary" id="check" disabled>Prüfen</button>
+    <button class="btn ghost" id="reset">Zurücksetzen</button>
+  </div>
+  <div id="msg" role="status" aria-live="polite"></div>
+</main>
+
+<script>
+const labels = ["Variable","Wert","Verknüpfung","Klammern"];
+// Bestandteile: id, Anzeige, Name für Screenreader
+const parts = [
+  {g:["("],        n:"Klammern"},    // 0 (beide Klammern gehören zusammen)
+  {g:["a"],        n:"a"},           // 1
+  {g:["∧"],        n:"∧"},           // 2
+  {g:["1"],        n:"1"},           // 3
+  {g:[")"],        n:"Klammern"},    // 4 (gehört zu 0)
+  {g:["∨"],        n:"∨"},           // 5
+  {g:["b"],        n:"b"}            // 6
+];
+// Zuordnung von Anzeige-Token zu Aufgaben-Items
+const item = [0,1,2,3,0,4,5];                      // Token -> Item
+const solution = ["Klammern","Variable","Verknüpfung","Wert","Verknüpfung","Variable"]; // Item -> Lösung
+// Items: 0 Klammern, 1 a, 2 ∧, 3 1, 4 ∨, 5 b
+const solItem = ["Klammern","Variable","Verknüpfung","Wert","Verknüpfung","Variable"];
+
+let ans = [null,null,null,null,null,null];
+let sel = 0;
+let checked = false;
+
+const termEl = document.getElementById("term");
+const chipsEl = document.getElementById("chips");
+const msg = document.getElementById("msg");
+const checkBtn = document.getElementById("check");
+
+const SOFT={"Variable":"Vari\u00ADable","Verknüpfung":"Verknüp\u00ADfung","Klammern":"Klam\u00ADmern","Wert":"Wert"};
+const soft=l=>SOFT[l]||l;
+
+function render(){
+  termEl.innerHTML = "";
+  parts.forEach((p,t)=>{
+    const i = item[t];
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "tok" + (t===4 ? " closing" : "");
+    if(sel===i) b.classList.add("selected");
+    if(checked && ans[i]!==null) b.classList.add(ans[i]===solItem[i]?"ok":"bad");
+    b.innerHTML = `<span class="glyph">${p.g[0]}</span><span class="tag">${ans[i]?soft(ans[i]):""}</span>`;
+    b.setAttribute("aria-label", `Bestandteil ${p.g[0]}` + (ans[i]?`, benannt als ${ans[i]}`:""));
+    b.onclick = ()=>{ sel = (sel===i)?null:i; render(); };
+    termEl.append(b);
+  });
+  chipsEl.innerHTML = "";
+  labels.forEach(l=>{
+    const c = document.createElement("button");
+    c.type="button"; c.className="chip"; c.textContent=l;
+    c.onclick = ()=>assign(l);
+    chipsEl.append(c);
+  });
+  checkBtn.disabled = ans.some(a=>a===null);
+}
+
+function assign(l){
+  if(sel===null){ msg.className=""; msg.textContent="Wähle zuerst einen Bestandteil des Schaltterms aus."; return; }
+  ans[sel] = l;
+  const order = [1,2,3,4,5,0];
+  const next = order.find(i=>ans[i]===null);
+  sel = next===undefined ? null : next;
+  checked = false; msg.className=""; msg.textContent="";
+  render();
+}
+
+checkBtn.onclick = ()=>{
+  checked = true;
+  const n = ans.filter((a,i)=>a===solItem[i]).length;
+  if(n===6){ msg.className="ok"; msg.textContent="Alles richtig. Sehr gut!"; }
+  else{ msg.className="bad"; msg.textContent = `${n} von 6 richtig. Die rot markierten Bestandteile kannst du ändern.`; }
+  render();
+};
+
+document.getElementById("reset").onclick = ()=>{
+  ans=[null,null,null,null,null,null]; sel=0; checked=false; msg.className=""; msg.textContent=""; render();
+};
+
+// Startauswahl: erster Bestandteil mit Beschriftung "a"
+sel = 1;
+render();
+</script>
+</body>
+</html>
